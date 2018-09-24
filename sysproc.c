@@ -102,3 +102,16 @@ int sys_shutdown(void)
   shutdown();
   return 0;
 }
+
+// return how many write syscalls have occurred
+// since start.
+int
+sys_writecount(void)
+{
+  uint xticks;
+
+  acquire(&tickslock);
+  xticks = write_ticks;
+  release(&tickslock);
+  return xticks;
+}
