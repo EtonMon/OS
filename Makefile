@@ -164,6 +164,7 @@ UPROGS=\
 	_cat\
 	_echo\
 	_writecount\
+	_tickets\
 	_forktest\
 	_grep\
 	_init\

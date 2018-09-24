@@ -26,6 +26,7 @@ int uptime(void);
 int yield(void);
 int shutdown(void);
 int writecount(void);
+int settickets(int number);
 
 // ulib.c
 int stat(char*, struct stat*);

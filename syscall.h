@@ -22,4 +22,5 @@
 #define SYS_close     21
 #define SYS_yield     22
 #define SYS_shutdown  23
-#define SYS_writecount  24  
+#define SYS_writecount  24
+#define SYS_settickets 25  

@@ -115,3 +115,9 @@ sys_writecount(void)
   release(&tickslock);
   return xticks;
 }
+
+int 
+sys_settickets(void){
+  argint(0,&myproc()->tickets);
+  return 0;
+}
