@@ -121,3 +121,8 @@ sys_settickets(void){
   argint(0,&myproc()->tickets);
   return 0;
 }
+
+int
+sys_getprocessesinfo(void){
+  return getprocessesinfo();
+}

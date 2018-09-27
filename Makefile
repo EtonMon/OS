@@ -164,6 +164,9 @@ UPROGS=\
 	_cat\
 	_echo\
 	_writecount\
+	_processlist\
+	_lotterytest\
+	_timewithtickets\
 	_tickets\
 	_forktest\
 	_grep\

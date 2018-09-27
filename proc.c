@@ -138,6 +138,9 @@ userinit(void)
   p->tf->eflags = FL_IF;
   p->tf->esp = PGSIZE;
   p->tf->eip = 0;  // beginning of initcode.S
+  p->tickets = 10;
+  p->ticks = 0;
+
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
@@ -199,6 +202,8 @@ fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
+  np->tickets = curproc->tickets;
+  np->ticks = 0;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -330,25 +335,45 @@ scheduler(void)
     // Enable interrupts on this processor.
     sti();
 
-    // Loop over process table looking for process to run.
     acquire(&ptable.lock);
+
+    unsigned tickets = totaltickets();
+
+    if(tickets==0){
+      release(&ptable.lock);
+      continue;
+    }
+
+    unsigned chosen = next_random()%tickets;
+
+    // Loop over process table looking for process to run.
+    
+    int counter = 0;
+
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+      counter+=p->tickets;
 
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
+      if(counter>chosen){
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
+        p->ticks++;
+        // Switch to chosen process.  It is the process's job
+        // to release ptable.lock and then reacquire it
+        // before jumping back to us.
+        c->proc = p;
+        switchuvm(p);
+        p->state = RUNNING;
+
+        swtch(&(c->scheduler), p->context);
+        switchkvm();
+
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        c->proc = 0;
+        break;
+      }
     }
     release(&ptable.lock);
 
@@ -531,4 +556,83 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+int
+getprocessesinfo(void){
+  struct processes_info *procinfo;
+  argptr(0, (char**)&procinfo, sizeof(struct processes_info));
+
+  int numprocs = 0;
+
+  acquire(&ptable.lock);
+  for(int i=0; i<NPROC; i++){
+    if(ptable.proc[i].state!=UNUSED){
+      numprocs++;
+      procinfo->pids[i] = ptable.proc[i].pid;
+      procinfo->ticks[i] = ptable.proc[i].ticks;
+      procinfo->tickets[i] = ptable.proc[i].tickets;
+    }
+  }
+  procinfo->num_processes = numprocs;
+  release(&ptable.lock);
+  return 0;
+}
+
+unsigned
+totaltickets(void){
+  
+  unsigned total = 0;
+
+  for(int i=0; i<NPROC; i++){
+    if(ptable.proc[i].state!=UNUSED){
+      total+=ptable.proc[i].tickets;
+    }
+  }
+
+  return total;
+}
+
+
+
+
+/*----------------RANDOM NUM GENERATOR------------------*/
+static unsigned random_seed = 1;
+
+#define RANDOM_MAX ((1u << 31u) - 1u)
+unsigned lcg_parkmiller(unsigned *state)
+{
+    const unsigned N = 0x7fffffff;
+    const unsigned G = 48271u;
+
+    /*  
+        Indirectly compute state*G%N.
+
+        Let:
+          div = state/(N/G)
+          rem = state%(N/G)
+
+        Then:
+          rem + div*(N/G) == state
+          rem*G + div*(N/G)*G == state*G
+
+        Now:
+          div*(N/G)*G == div*(N - N%G) === -div*(N%G)  (mod N)
+
+        Therefore:
+          rem*G - div*(N%G) === state*G  (mod N)
+
+        Add N if necessary so that the result is between 1 and N-1.
+    */
+    unsigned div = *state / (N / G);  /* max : 2,147,483,646 / 44,488 = 48,271 */
+    unsigned rem = *state % (N / G);  /* max : 2,147,483,646 % 44,488 = 44,487 */
+
+    unsigned a = rem * G;        /* max : 44,487 * 48,271 = 2,147,431,977 */
+    unsigned b = div * (N % G);  /* max : 48,271 * 3,399 = 164,073,129 */
+
+    return *state = (a > b) ? (a - b) : (a + (N - b));
+}
+
+unsigned next_random() {
+    return lcg_parkmiller(&random_seed);
 }
